@@ -1,0 +1,13 @@
+{
+  "name": "iptv-player",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Player IPTV standalone (HLS/MPEG-TS) com proxy CORS para servidores Xtream",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

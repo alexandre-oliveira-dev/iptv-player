@@ -1,0 +1,1415 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rundown — Player IPTV</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.js"></script>
+    <style>
+      :root {
+        --ink: #101319;
+        --paper: #e5e7eb;
+        --card: #ffffff;
+        --rule: #c7cbd3;
+        --rule-soft: #e2e5ea;
+        --live: #d71e14;
+        --lamp-off: #b7bbc4;
+        --data: #0d6b6b;
+        --muted: #666c78;
+        --shadow:
+          0 1px 0 rgba(16, 19, 25, 0.06), 0 8px 24px -18px rgba(16, 19, 25, 0.5);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+      }
+
+      body {
+        background: var(--paper);
+        color: var(--ink);
+        font-family:
+          "Public Sans",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        font-size: 15px;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        padding: 20px;
+      }
+
+      .shell {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+
+      /* ---------- cabeçalho ---------- */
+      .masthead {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        border-bottom: 2px solid var(--ink);
+        padding-bottom: 10px;
+        margin-bottom: 18px;
+      }
+      .wordmark {
+        font-family: "Barlow Condensed", sans-serif;
+        font-weight: 700;
+        font-size: 40px;
+        line-height: 0.9;
+        text-transform: uppercase;
+        letter-spacing: 0.01em;
+        margin: 0;
+      }
+      .wordmark span {
+        color: var(--live);
+      }
+      .masthead-meta {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11.5px;
+        color: var(--muted);
+        text-align: right;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      /* ---------- grade ---------- */
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 18px;
+        align-items: start;
+      }
+
+      .panel {
+        background: var(--card);
+        border: 1px solid var(--rule);
+        box-shadow: var(--shadow);
+      }
+      .panel-label {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--muted);
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--rule-soft);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* ---------- vídeo ---------- */
+      .stage {
+        background: #000;
+        position: relative;
+        aspect-ratio: 16/9;
+      }
+      .stage video {
+        width: 100%;
+        height: 100%;
+        display: block;
+        background: #000;
+      }
+
+      .tally {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        background: rgba(16, 19, 25, 0.72);
+        backdrop-filter: blur(6px);
+        padding: 5px 10px 5px 8px;
+        font-family: "Barlow Condensed", sans-serif;
+        font-weight: 600;
+        font-size: 14px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #fff;
+      }
+      .lamp {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--lamp-off);
+        flex: none;
+      }
+      .tally[data-state="live"] .lamp {
+        background: var(--live);
+        animation: pulse 1.8s ease-in-out infinite;
+      }
+      .tally[data-state="connecting"] .lamp,
+      .tally[data-state="retrying"] .lamp {
+        background: #e8a317;
+        animation: pulse 0.9s ease-in-out infinite;
+      }
+      .tally[data-state="failed"] .lamp {
+        background: var(--lamp-off);
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.25;
+        }
+      }
+
+      .nowplaying {
+        padding: 12px 14px;
+        border-top: 1px solid var(--rule-soft);
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .np-num {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+        color: #fff;
+        background: var(--ink);
+        padding: 2px 7px;
+      }
+      .np-name {
+        font-family: "Barlow Condensed", sans-serif;
+        font-weight: 700;
+        font-size: 26px;
+        text-transform: uppercase;
+        letter-spacing: 0.005em;
+        line-height: 1;
+      }
+      .np-group {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-left: auto;
+      }
+
+      /* ---------- lista de canais ---------- */
+      .rundown {
+        max-height: 60vh;
+        overflow-y: auto;
+      }
+      .cat-group {
+        border-bottom: 1px solid var(--rule-soft);
+      }
+      .cat-summary {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: var(--card);
+        list-style: none;
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--rule-soft);
+      }
+      .cat-summary::-webkit-details-marker {
+        display: none;
+      }
+      .cat-summary::before {
+        content: "▸";
+        font-size: 9px;
+        transition: transform 0.15s;
+      }
+      .cat-group[open] > .cat-summary::before {
+        transform: rotate(90deg);
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 12px 34px minmax(0, 1fr);
+        align-items: center;
+        gap: 9px;
+        width: 100%;
+        text-align: left;
+        background: none;
+        border: 0;
+        border-bottom: 1px solid var(--rule-soft);
+        padding: 10px 12px;
+        cursor: pointer;
+        font: inherit;
+        color: inherit;
+      }
+      .row:hover {
+        background: #f3f4f6;
+      }
+      .row:focus-visible {
+        outline: 2px solid var(--data);
+        outline-offset: -2px;
+      }
+      .row[aria-current="true"] {
+        background: #fbeae9;
+        box-shadow: inset 3px 0 0 var(--live);
+      }
+      .row-lamp {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--lamp-off);
+      }
+      .row[aria-current="true"] .row-lamp {
+        background: var(--live);
+      }
+      .row-num {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .row-name {
+        font-family: "Barlow Condensed", sans-serif;
+        font-weight: 600;
+        font-size: 18px;
+        text-transform: uppercase;
+        line-height: 1.15;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .row-sub {
+        grid-column: 3;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+      }
+
+      /* ---------- diagnóstico ---------- */
+      .diag {
+        margin-top: 18px;
+      }
+      .readout {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        border-bottom: 1px solid var(--rule-soft);
+      }
+      .cell {
+        padding: 10px 12px;
+        border-right: 1px solid var(--rule-soft);
+      }
+      .cell:last-child {
+        border-right: 0;
+      }
+      .cell dt {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 9.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+        margin: 0 0 3px;
+      }
+      .cell dd {
+        margin: 0;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 16px;
+        font-weight: 500;
+        color: var(--data);
+      }
+      .cell dd.alert {
+        color: var(--live);
+      }
+
+      .log {
+        margin: 0;
+        padding: 10px 12px;
+        height: 132px;
+        overflow-y: auto;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11.5px;
+        line-height: 1.7;
+        color: var(--ink);
+      }
+      .log div {
+        display: flex;
+        gap: 9px;
+      }
+      .log time {
+        color: var(--muted);
+        flex: none;
+      }
+      .log .lv-err {
+        color: var(--live);
+      }
+      .log .lv-ok {
+        color: var(--data);
+      }
+
+      /* ---------- painel de fontes ---------- */
+      .aside-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .src-toggle {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        background: none;
+        border: 1px solid var(--rule);
+        color: var(--ink);
+        padding: 3px 8px;
+        cursor: pointer;
+      }
+      .src-toggle:hover {
+        background: #f3f4f6;
+      }
+      .src-form {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px;
+        border-bottom: 1px solid var(--rule-soft);
+      }
+      .src-form[hidden] {
+        display: none;
+      }
+      .src-form label {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .src-form label[hidden] {
+        display: none;
+      }
+      .src-form input,
+      .src-form select {
+        font: inherit;
+        font-size: 13px;
+        padding: 6px 8px;
+        border: 1px solid var(--rule);
+        background: #fff;
+        color: var(--ink);
+      }
+      .src-form button[type="submit"] {
+        margin-top: 4px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        background: var(--ink);
+        color: #fff;
+        border: 0;
+        padding: 8px 10px;
+        cursor: pointer;
+      }
+      .src-form button[type="submit"]:hover {
+        opacity: 0.9;
+      }
+      .src-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        max-height: 160px;
+        overflow-y: auto;
+      }
+      .src-list li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--rule-soft);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+      }
+      .src-list .src-item-label {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--ink);
+      }
+      .src-list .src-remove {
+        flex: none;
+        background: none;
+        border: 1px solid var(--rule);
+        color: var(--live);
+        font-family: "IBM Plex Mono", monospace;
+        cursor: pointer;
+        padding: 1px 7px;
+      }
+      .src-empty {
+        padding: 10px 12px;
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+
+      /* ---------- rodapé ---------- */
+      .swap {
+        margin-top: 18px;
+        padding: 14px 16px;
+        border: 1px dashed var(--rule);
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .swap code {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+        background: #f3f4f6;
+        padding: 1px 5px;
+        color: var(--ink);
+      }
+      .swap strong {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      kbd {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        border: 1px solid var(--rule);
+        padding: 1px 5px;
+        background: #f3f4f6;
+      }
+
+      @media (max-width: 860px) {
+        body {
+          padding: 12px;
+        }
+        .grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .wordmark {
+          font-size: 32px;
+        }
+        .rundown {
+          max-height: 340px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="masthead">
+        <h1 class="wordmark">Run<span>down</span></h1>
+        <div class="masthead-meta">
+          Player IPTV · HLS + MPEG-TS<br />
+          <kbd>↑</kbd><kbd>↓</kbd> trocar canal · <kbd>espaço</kbd> pausar ·
+          <kbd>F</kbd> tela cheia
+        </div>
+      </header>
+
+      <div class="grid">
+        <main>
+          <section class="panel">
+            <div class="stage">
+              <video id="video" playsinline controls></video>
+              <div class="tally" id="tally" data-state="idle">
+                <span class="lamp"></span><span id="tallyText">Parado</span>
+              </div>
+            </div>
+            <div class="nowplaying">
+              <span class="np-num" id="npNum">—</span>
+              <span class="np-name" id="npName">Selecione um canal</span>
+              <span class="np-group" id="npGroup"></span>
+            </div>
+          </section>
+
+          <section class="panel diag">
+            <div class="panel-label">
+              <span>Diagnóstico do sinal</span>
+              <span id="engine">—</span>
+            </div>
+            <dl class="readout">
+              <div class="cell">
+                <dt>Buffer</dt>
+                <dd id="mBuffer">0.0s</dd>
+              </div>
+              <div class="cell">
+                <dt>Resolução</dt>
+                <dd id="mRes">—</dd>
+              </div>
+              <div class="cell">
+                <dt>Segmentos</dt>
+                <dd id="mSeg">0</dd>
+              </div>
+              <div class="cell">
+                <dt>Reconexões</dt>
+                <dd id="mRetry">0</dd>
+              </div>
+              <div class="cell">
+                <dt>Tempo no ar</dt>
+                <dd id="mUptime">00:00</dd>
+              </div>
+            </dl>
+            <div class="log" id="log" aria-live="polite"></div>
+          </section>
+        </main>
+
+        <aside class="aside-stack">
+          <section class="panel src-panel">
+            <div class="panel-label">
+              <span>Fontes</span>
+              <button type="button" id="srcToggle" class="src-toggle">
+                + Adicionar
+              </button>
+            </div>
+            <form id="srcForm" class="src-form" hidden>
+              <label>
+                Tipo
+                <select id="srcType">
+                  <option value="m3u">Lista M3U (URL)</option>
+                  <option value="video">Vídeo (URL direta)</option>
+                  <option value="xtream">Xtream Codes</option>
+                </select>
+              </label>
+
+              <label id="srcM3uField">
+                URL da lista
+                <input
+                  type="url"
+                  id="srcM3uUrl"
+                  placeholder="https://.../playlist.m3u8"
+                />
+              </label>
+
+              <label id="srcVideoField" hidden>
+                URL do vídeo (mp4, webm, mov...)
+                <input
+                  type="url"
+                  id="srcVideoUrl"
+                  placeholder="https://.../video.mp4"
+                />
+              </label>
+
+              <label id="srcBaseField" hidden>
+                Servidor (base)
+                <input
+                  type="text"
+                  id="srcBase"
+                  placeholder="http://host:porta"
+                />
+              </label>
+              <label id="srcUserField" hidden>
+                Usuário
+                <input type="text" id="srcUser" autocomplete="off" />
+              </label>
+              <label id="srcPassField" hidden>
+                Senha
+                <input type="text" id="srcPass" autocomplete="off" />
+              </label>
+              <label id="srcOutputField" hidden>
+                Saída
+                <select id="srcOutput">
+                  <option value="m3u8">m3u8 (HLS)</option>
+                  <option value="ts">ts (MPEG-TS)</option>
+                </select>
+              </label>
+
+              <button type="submit">Adicionar e testar</button>
+            </form>
+            <ul class="src-list" id="srcList"></ul>
+          </section>
+
+          <section class="panel">
+            <div class="panel-label">
+              <span>Canais</span><span id="chCount">0</span>
+            </div>
+            <div class="rundown" id="rundown"></div>
+          </section>
+        </aside>
+      </div>
+
+      <p class="swap">
+        <strong>Fontes próprias:</strong> use o painel "Fontes" ao lado para
+        adicionar uma lista M3U (URL) ou um servidor Xtream Codes (base,
+        usuário, senha) — fica salvo no seu navegador
+        (<code>localStorage</code>), não é enviado a lugar nenhum além do proxy
+        local. O player testa a fonte na hora e mostra o resultado no log.
+        Servidores Xtream não enviam cabeçalho CORS, por isso o
+        <code>player_api.php</code> e o manifesto/segmentos passam pelo proxy
+        local (<code>server.js</code>).
+      </p>
+    </div>
+
+    <script>
+      /* ───────────────── proxy CORS ─────────────────
+         Servidores Xtream não enviam Access-Control-Allow-Origin, então tanto o
+         player_api.php quanto o .m3u8/.ts precisam passar pelo proxy local
+         (server.js), que repassa a requisição e reescreve URLs relativas dentro
+         do manifesto para continuarem passando pelo proxy.                    */
+      function proxied(url) {
+        return `/api/proxy?url=${encodeURIComponent(url)}`;
+      }
+
+      const SOURCES = [
+        {
+          // iptv-org/iptv: lista mantida pela comunidade, com bot que verifica
+          // e remove links mortos automaticamente. Testada manualmente (amostra
+          // de 302 canais BR via tvg-id): 202 responderam com manifesto real
+          // (#EXTM3U), ~67% de acerto — bem acima da lista antiga (2016-2017).
+          // É o índice GLOBAL (~13,5 mil canais, todos os países); carregada
+          // ao vivo a cada load, não é um snapshot fixo.
+          mode: "m3u",
+          m3u: {
+            url: "https://iptv-org.github.io/iptv/index.m3u",
+          }, 
+        },
+      ];
+
+      /*
+      #EXTINF:-1 tvg-id="Globorj.br" tvg-name="GLOBO RJ HD" tvg-logo="http://img.elitehdbr.com/logos/globo.png" group-title="CANAIS ABERTOS",GLOBO RJ HD
+http://128.199.34.33/loadbalance/bobonordeste/chunks.m3u8?pxAuth=VaOoaJFM1EZJGDZnCiFRA4OGxzz1wOHs
+#EXTINF:-1 tvg-id="Globorj.br" tvg-name="GLOBO RJ HD E*" tvg-logo="http://img.elitehdbr.com/logos/globo.png" group-title="CANAIS ABERTOS",GLOBO RJ HD E*
+http://159.203.60.223/loadbalance/bobosp/chunks.m3u8?pxAuth=YHgxHTeBKw0FBuLHOkWe3xvHTOdMkw7F
+#EXTINF:-1 tvg-id="" tvg-name="A FAZENDA 24H HD (apenas Brasil)" tvg-logo="https://assets.r7.com/assets/schumi_hotsites/a-fazenda/logo-16ea21a6ded94688134699bf70b638c6.png" group-title="CANAIS ABERTOS",A FAZENDA 24H HD (apenas Brasil)
+http://afazendaoitohls1-lh.akamaihd.net/i/afazendaoitohls1_1@379189/index_720_av-p.m3u8
+
+################ DOCUMENTARIOS ##################
+
+#EXTINF:-1 tvg-id="Comedycentral.br" tvg-name="COMEDY CENTRAL ***" tvg-logo="http://i.imgur.com/ZekUX7A.png" group-title="FILMES",COMEDY CENTRAL ***
+http://165.227.100.253/comedycentral/tracks-v1a1/index.m3u8?pxAuth=RKJdMXdWTsLv3RRelMtX606bIxKpV7Nc
+#EXTINF:-1 tvg-id="Homehealth.br" tvg-name="DISCOVERY HOME & HEALTH HD **" tvg-logo="http://i.imgur.com/FJgwtT5.png" group-title="DOCUMENTARIOS",DISCOVERY HOME & HEALTH HD **
+http://185.181.100.218:8081/live/106/chunks.m3u8?nimblesessionid=3997830&wmsAuthSign=c2VydmVyX3RpbWU9MTAvOC8yMDE3IDE6MjA6NTEgQU0maGFzaF92YWx1ZT1hQnY4OUVyMmtFYUZ3MVdhV215L0hnPT0mdmFsaWRtaW51dGVzPTEw
+#EXTINF:-1 tvg-id="Investigacaodiscoveryid.br" tvg-name="ID - INVESTIGAÇÃO DISCOVERY HD ***" tvg-logo="https://s32.postimg.org/xy559rchx/discoveryid.png" group-title="DOCUMENTARIOS",ID - INVESTIGAÇÃO DISCOVERY HD ***
+http://165.227.100.253/investigacaodiscovery/tracks-v1a1/index.m3u8?pxAuth=4IfTPs5cEi55teqs677BKRCFVyHmIcaP
+#EXTINF:-1 tvg-id="Discturbohd.br" tvg-name="DISCOVERY TURBO HD **" tvg-logo="http://i.imgur.com/2vuY35C.png" group-title="DOCUMENTARIOS",DISCOVERY TURBO HD **
+http://185.181.102.2:8081/live/turbo/chunks.m3u8?nimblesessionid=2410037&wmsAuthSign=c2VydmVyX3RpbWU9MTAvOC8yMDE3IDE6Mzc6NTQgQU0maGFzaF92YWx1ZT02QndCcGRobTdHakdvcHJEbEpHaDhRPT0mdmFsaWRtaW51dGVzPTEw
+#EXTINF:-1 tvg-id="Animalplanet.br" tvg-name="ANIMAL PLANET HD ***" tvg-logo="http://img.elitehdbr.com/logos/animalplanet.png" group-title="DOCUMENTARIOS",ANIMAL PLANET HD ***
+http://185.181.100.218:8081/live/30/chunks.m3u8?nimblesessionid=3998222&wmsAuthSign=c2VydmVyX3RpbWU9MTAvOC8yMDE3IDE6MzU6MjIgQU0maGFzaF92YWx1ZT1JUGNTNGs2WFlWYzVpdm9DUkF3VW93PT0mdmFsaWRtaW51dGVzPTEw
+#EXTINF:-1 tvg-id="Discovery.br" tvg-name="DISCOVERY CHANNEL HD **" tvg-logo="http://img.elitehdbr.com/logos/discoverchannel.png" group-title="DOCUMENTARIOS",DISCOVERY CHANNEL HD **
+http://185.181.102.2:8081/live/master04/chunks.m3u8?nimblesessionid=2409974&wmsAuthSign=c2VydmVyX3RpbWU9MTAvOC8yMDE3IDE6MzY6MjMgQU0maGFzaF92YWx1ZT0xckhrL3dpM0dpb1NJMVJwTzZtZ1R3PT0mdmFsaWRtaW51dGVzPTEw
+#EXTINF:-1 tvg-id="Hdtheater.br" tvg-name="DISCOVERY THEATER HD **" tvg-logo="http://i.imgur.com/DHNMh5i.png" group-title="DOCUMENTARIOS",DISCOVERY THEATER HD **
+http://159.203.66.6/discoverytheaterhd/tracks-v1a1/index.m3u8?pxAuth=hE881XBFKLDPdSaGNbCxlodzo9E6m5BY
+#EXTINF:-1 tvg-id="Discoveryworldhd.br" tvg-name="DISCOVERY WORLD  HD **" tvg-logo="http://i.imgur.com/pZLvsXH.png" group-title="DOCUMENTARIOS",DISCOVERY WORLD  HD **
+http://165.227.67.52/discoveryworldhd/tracks-v1a1/index.m3u8?pxAuth=tYkHzyxo1nJ19l9SA3CTtoCpCx1AHQfS
+#EXTINF:-1 tvg-id="DiscoveryCivilization.br" tvg-name="DISCOVERY CIVILIZATION **" tvg-logo="http://i.imgur.com/dN249KE.png" group-title="DOCUMENTARIOS",DISCOVERY CIVILIZATION **
+http://159.203.66.6/yxydiscoverycivilization/tracks-v1a1/index.m3u8?pxAuth=nmmFVnbPEiDwqISbumcJY0qcVKgnZdjU
+#EXTINF:-1 tvg-id="DiscoveryScience.br" tvg-name="DISCOVERY SCIENCE **" tvg-logo="http://i.imgur.com/Dx49y4f.png" group-title="DOCUMENTARIOS",DISCOVERY SCIENCE **
+http://185.181.102.3:8081/live/105/chunks.m3u8?nimblesessionid=9187713&wmsAuthSign=c2VydmVyX3RpbWU9MTAvOC8yMDE3IDE6Mzk6MzggQU0maGFzaF92YWx1ZT02ZGlOTUtkcG1NRUZWWWVVWWpBWTBBPT0mdmFsaWRtaW51dGVzPTEw
+#EXTINF:-1 tvg-id="Natgeowildhd.br" tvg-name="NAT GEO HD **" tvg-logo="https://s16.postimg.org/p7ce9i39x/natgeo.png" group-title="DOCUMENTARIOS",NAT GEO HD **
+http://165.227.67.52/natgeowild/tracks-v1a1/index.m3u8?pxAuth=Xfu3uS2HqjFQoUPmQtqrN41bhPF2aTVs
+#EXTINF:-1 tvg-id="Nationalgeographic.br" tvg-name="NATIONAL GEOGRAPHIC HD ***" tvg-logo="https://s16.postimg.org/p7ce9i39x/natgeo.png" group-title="DOCUMENTARIOS",NATIONAL GEOGRAPHIC HD ***
+http://185.181.102.3:8081/live/natgeo/chunks.m3u8?nimblesessionid=9187328&wmsAuthSign=c2VydmVyX3RpbWU9MTAvOC8yMDE3IDE6MzM6MTggQU0maGFzaF92YWx1ZT0zM1Y0MFd0UWdLSjI3RGNZditvMW5RPT0mdmFsaWRtaW51dGVzPTEw
+#EXTINF:-1 tvg-id="Historychannel.br" tvg-name="HISTORY CHANNEL HD **" tvg-logo="http://img.elitehdbr.com/logos/history.png" group-title="DOCUMENTARIOS",HISTORY CHANNEL HD **
+http://185.181.102.3:8081/live/history/chunks.m3u8?nimblesessionid=9187230&wmsAuthSign=c2VydmVyX3RpbWU9MTAvOC8yMDE3IDE6MzE6MzIgQU0maGFzaF92YWx1ZT1mODJQY3Y4cW0wNVo5dEgyeHhwMjJnPT0mdmFsaWRtaW51dGVzPTEw
+#EXTINF:-1 tvg-id="H2.br" tvg-name="H2 HD **" tvg-logo="http://i.imgur.com/jhiD9Wc.png" group-title="DOCUMENTARIOS",H2 HD **
+http://159.203.66.6/h2/tracks-v1a1/index.m3u8?pxAuth=EruCn4I6eCVT1nXXGqdOWRmIOW8OUeFT
+
+####################### SPORT ############################
+
+#EXTINF:-1 tvg-id="Sportv.br" tvg-name="SPORTV HD **" tvg-logo="http://img.elitehdbr.com/logos/sportv.png" group-title="ESPORTES",SPORTV HD **
+http://188.166.19.208/loadbalance/slv0_bkp/chunks.m3u8?pxAuth=gA3eA2N7b7GcLZRFsDtK8O8NSIoyT9ob
+#EXTINF:-1 tvg-id="Sportv2.br" tvg-name="SPORTV 2 HD **" tvg-logo="http://img.elitehdbr.com/logos/sportv2.png" group-title="ESPORTES",SPORTV 2 HD **
+http://cdn.widestream.io:8081/wideedge1/ch02-1/chunks.m3u8?nimblesessionid=7069691&wmsAuthSign=c2VydmVyX3RpbWU9MTAvOC8yMDE3IDI6MDI6MDEgQU0maGFzaF92YWx1ZT1kUmhpQVRwTUJtNmlKTG9yZ2Fob0hRPT0mdmFsaWRtaW51dGVzPTIw
+
+################### FILMES ########################
+
+#EXTINF:-1 tvg-id="Tcpipoca.br" tvg-name="TELECINE PIPOCA HD **" tvg-logo="http://i.imgur.com/lfOS7gF.png" group-title="FILMES",TELECINE PIPOCA HD
+http://159.203.66.6/telecinepipoca/tracks-v1a1/index.m3u8?pxAuth=0DZdmROLGFwTm3I4Aqdn09vrR2oyUBov
+#EXTINF:-1 tvg-id="Tcpremium.br" tvg-name="TELECINE PREMIUM **" tvg-logo="http://i.imgur.com/aMWCWA0.png" group-title="FILMES",TELECINE PREMIUM
+http://165.227.100.253/telecinepremium/tracks-v1a1/index.m3u8?pxAuth=yVIyBzJVT6DDJCnKsRTmkFyTn62ep9ZK
+#EXTINF:-1 tvg-id="Tcaction.br" tvg-name="TELECINE ACTION SD" tvg-logo="http://i.imgur.com/Lx3R36Y.png" group-title="FILMES",TELECINE ACTION
+http://159.203.66.6/telecineaction/tracks-v1a1/index.m3u8?pxAuth=GzxdwdU2JkzUCd31YOpi0rOeVBfwQyD6
+#EXTINF:-1 tvg-id="Tcfun.br" tvg-name="TELECINE FUN HD **" tvg-logo="http://i.imgur.com/ltpUjbD.png" group-title="FILMES",TELECINE FUN HD 
+http://165.227.100.253/telecinefun/tracks-v1a1/index.m3u8?pxAuth=6jA3wwtRsyZl8z8obfHpHtbtCXSA8YjP
+#EXTINF:-1 tvg-id="Tctouch.br" tvg-name="TELECINE TOUCH HD **" tvg-logo="http://i.imgur.com/849pB2j.png" group-title="FILMES",TELECINE TOUCH
+http://159.203.66.6/telecinetouch/tracks-v1a1/index.m3u8?pxAuth=vka9o1D2DHfGJPzMfJA6EHMGs2Jw7vTd
+#EXTINF:-1 tvg-id="Hbo.br" tvg-name="HBO HD **" tvg-logo="https://s19.postimg.org/q1hn2aqrn/HBO.png" group-title="FILMES",HBO HD
+http://165.227.100.253/hbo2/tracks-v1a1/index.m3u8?pxAuth=klaBCicXdOUibkn0mzfD51EfdiUnVnFF
+      */
+
+      /* ───────────────── fontes customizadas ─────────────────
+         Adicionadas pelo usuário no painel "Fontes" da interface. Persistem só
+         no localStorage do navegador — nunca saem daqui, exceto para o proxy
+         local quando a fonte é efetivamente carregada.                        */
+      const CUSTOM_SOURCES_KEY = "iptv-player:custom-sources";
+
+      function loadCustomSources() {
+        try {
+          const raw = localStorage.getItem(CUSTOM_SOURCES_KEY);
+          const list = raw ? JSON.parse(raw) : [];
+          return Array.isArray(list) ? list : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function saveCustomSources(list) {
+        localStorage.setItem(CUSTOM_SOURCES_KEY, JSON.stringify(list));
+      }
+
+      let customSources = loadCustomSources();
+
+      function sourceLabel(source) {
+        if (source.mode === "m3u") return source.m3u.url;
+        if (source.mode === "xtream")
+          return `${source.xtream.base} (${source.xtream.user})`;
+        if (source.mode === "static")
+          return source.channels?.length === 1
+            ? source.channels[0].url
+            : "lista estática";
+        return "fonte desconhecida";
+      }
+      /* Alguns servidores não devolvem category_name junto do canal — nesse caso
+         buscamos get_live_categories e montamos o mapa id → nome à parte.   */
+      async function fetchCategoryMap(base, user, pass) {
+        const url =
+          `${base}/player_api.php?username=${encodeURIComponent(user)}` +
+          `&password=${encodeURIComponent(pass)}` +
+          `&action=get_live_categories`;
+
+        try {
+          const res = await fetch(proxied(url));
+          if (!res.ok) return {};
+          const list = await res.json();
+          const map = {};
+          if (Array.isArray(list))
+            list.forEach(c => {
+              map[c.category_id] = c.category_name;
+            });
+          return map;
+        } catch {
+          return {};
+        }
+      }
+
+      function buildStreamUrl(xtream, id) {
+        if (id === undefined || id === null || id === "") return null;
+        const {base, user, pass, output} = xtream;
+        return `${base}/live/${encodeURIComponent(user)}/${encodeURIComponent(pass)}/${id}.${output}`;
+      }
+
+      /* Parser de M3U cru: cada canal é uma linha #EXTINF (com group-title e o
+         nome depois da vírgula) seguida da URL do stream na linha seguinte.  */
+      function parseM3U(text) {
+        const lines = text.split(/\r?\n/);
+        const channels = [];
+        let pending = null;
+
+        for (const raw of lines) {
+          const line = raw.trim();
+          if (!line) continue;
+
+          if (line.startsWith("#EXTINF:")) {
+            const group = line.match(/group-title="([^"]*)"/i)?.[1];
+            const name = line.match(/,(.*)$/)?.[1]?.trim();
+            pending = {
+              group: group || "Sem categoria",
+              name: name || "Sem nome",
+            };
+            continue;
+          }
+
+          if (line.startsWith("#")) continue; // outras tags (#EXTVLCOPT, #EXTGRP...)
+
+          if (pending) {
+            channels.push({
+              name: pending.name,
+              group: pending.group,
+              url: line,
+            });
+            pending = null;
+          }
+        }
+
+        return channels;
+      }
+
+      async function loadM3UList(url) {
+        const res = await fetch(proxied(url));
+        if (!res.ok) throw new Error(`respondeu ${res.status}`);
+        const text = await res.text();
+        return parseM3U(text);
+      }
+
+      async function loadXtreamSource(source) {
+        const {base, user, pass} = source.xtream;
+
+        const url =
+          `${base}/player_api.php?username=${encodeURIComponent(user)}` +
+          `&password=${encodeURIComponent(pass)}` +
+          `&action=get_live_streams`;
+
+        const res = await fetch(proxied(url));
+        if (!res.ok) throw new Error(`respondeu ${res.status}`);
+
+        const list = await res.json();
+        if (!Array.isArray(list) || list.length === 0)
+          throw new Error("lista vazia");
+
+        const catMap = await fetchCategoryMap(base, user, pass);
+
+        return list
+          .map(c => ({
+            name: c.name,
+            group:
+              c.category_name ||
+              catMap[c.category_id] ||
+              (c.category_id ? `Categoria ${c.category_id}` : "Sem categoria"),
+            url: buildStreamUrl(source.xtream, c.stream_id),
+          }))
+          .filter(ch => ch.url);
+      }
+
+      /* Consulta TODAS as fontes (Xtream ou M3U cru; não para na primeira que
+         funciona) e funde os canais num único array só, ordenado por categoria. */
+      async function loadAllChannels() {
+        const merged = [];
+
+        for (const source of [...SOURCES, ...customSources]) {
+          const label = sourceLabel(source);
+
+          try {
+            log(`Testando ${label}...`);
+
+            const chans =
+              source.mode === "m3u"
+                ? await loadM3UList(source.m3u.url)
+                : source.mode === "static"
+                  ? source.channels
+                  : await loadXtreamSource(source);
+
+            if (chans.length === 0) {
+              log(`❌ ${label} retornou lista vazia`, "lv-err");
+              continue;
+            }
+
+            log(`✅ ${label}: ${chans.length} canais`, "lv-ok");
+            merged.push(...chans);
+          } catch (err) {
+            log(`❌ ${label}: ${err.message}`, "lv-err");
+          }
+        }
+
+        if (merged.length === 0)
+          throw new Error("Nenhuma fonte respondeu corretamente.");
+
+        merged.sort(
+          (a, b) =>
+            a.group.localeCompare(b.group, "pt-BR") ||
+            a.name.localeCompare(b.name, "pt-BR"),
+        );
+
+        merged.forEach((ch, i) => {
+          ch.num = i + 1;
+        });
+
+        return merged;
+      }
+
+      /* ───────────────── elementos ───────────────── */
+      const video = document.getElementById("video");
+      const tally = document.getElementById("tally");
+      const tallyTx = document.getElementById("tallyText");
+      const logEl = document.getElementById("log");
+      const rundown = document.getElementById("rundown");
+
+      /* ───────────────── estado ───────────────── */
+      let channels = [];
+      let current = -1;
+      let hls = null,
+        ts = null;
+      let retries = 0,
+        segments = 0,
+        startedAt = 0,
+        mediaErrors = 0,
+        autoSkips = 0;
+      let backoff = null,
+        ticker = null;
+
+      const STATES = {
+        idle: "Parado",
+        connecting: "Conectando",
+        live: "No ar",
+        retrying: "Reconectando",
+        failed: "Sem sinal",
+      };
+
+      function setState(s, detail) {
+        tally.dataset.state = s;
+        tallyTx.textContent = detail ? `${STATES[s]} · ${detail}` : STATES[s];
+      }
+
+      function log(msg, level = "") {
+        const t = new Date().toLocaleTimeString("pt-BR", {hour12: false});
+        const line = document.createElement("div");
+        line.innerHTML = `<time>${t}</time><span class="${level}"></span>`;
+        line.lastChild.textContent = msg;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+        while (logEl.childElementCount > 200)
+          logEl.removeChild(logEl.firstChild);
+      }
+
+      const set = (id, v, alert = false) => {
+        const el = document.getElementById(id);
+        el.textContent = v;
+        el.classList.toggle("alert", alert);
+      };
+
+      /* ───────────────── reprodução ───────────────── */
+      function teardown() {
+        clearTimeout(backoff);
+        if (hls) {
+          hls.destroy();
+          hls = null;
+        }
+        if (ts) {
+          ts.destroy();
+          ts = null;
+        }
+        video.removeAttribute("src");
+        video.load();
+      }
+
+      function play(index, opts = {}) {
+        const ch = channels[index];
+        if (!ch) return;
+
+        teardown();
+        current = index;
+        retries = 0;
+        segments = 0;
+        startedAt = 0;
+        mediaErrors = 0;
+        if (!opts.auto) autoSkips = 0;
+
+        document.getElementById("npNum").textContent = String(ch.num).padStart(
+          3,
+          "0",
+        );
+        document.getElementById("npName").textContent = ch.name;
+        document.getElementById("npGroup").textContent = ch.group || "";
+        set("mSeg", 0);
+        set("mRetry", 0);
+        set("mRes", "—");
+        set("mUptime", "00:00");
+
+        rowButtons.forEach((el, i) =>
+          el?.setAttribute("aria-current", i === index ? "true" : "false"),
+        );
+        const activeRow = rowButtons[index];
+        if (activeRow) {
+          activeRow.closest("details").open = true;
+          activeRow.scrollIntoView({block: "nearest"});
+        }
+
+        setState("connecting");
+        log(`Abrindo ${ch.name}`);
+        attach(ch.url);
+      }
+
+      function attach(rawUrl) {
+        const isTS = /\.ts(\?|$)/i.test(rawUrl);
+        const isDirectVideo = /\.(mp4|m4v|mov|webm|mkv)(\?|$)/i.test(rawUrl);
+        const url = proxied(rawUrl);
+
+        /* Arquivo de vídeo comum (não é stream ao vivo) — o elemento <video>
+           toca isso nativamente, sem hls.js/mpegts.js no meio.             */
+        if (isDirectVideo) {
+          document.getElementById("engine").textContent = "vídeo nativo";
+          video.src = url;
+          video.play().catch(() => log("Autoplay bloqueado — clique em play"));
+          video.addEventListener(
+            "loadeddata",
+            () => {
+              if (!startedAt) {
+                startedAt = Date.now();
+                retries = 0;
+                setState("live");
+                log("Vídeo carregado", "lv-ok");
+              }
+            },
+            {once: true},
+          );
+          video.addEventListener("error", () => fail("erro do elemento video"));
+          return;
+        }
+
+        /* MPEG-TS bruto — comum em servidores Xtream */
+        if (isTS && window.mpegts?.isSupported()) {
+          document.getElementById("engine").textContent = "mpegts.js";
+          ts = mpegts.createPlayer({type: "mpegts", isLive: true, url});
+          ts.attachMediaElement(video);
+          ts.on(mpegts.Events.ERROR, (type, detail, info) =>
+            fail(`${type}: ${detail}`, info?.code >= 400 && info?.code < 500),
+          );
+          ts.load();
+          video.play().catch(() => {});
+          return;
+        }
+
+        /* HLS via hls.js */
+        if (window.Hls?.isSupported()) {
+          document.getElementById("engine").textContent = "hls.js";
+          hls = new Hls({
+            liveDurationInfinity: true,
+            lowLatencyMode: false,
+            manifestLoadingMaxRetry: 2,
+            levelLoadingMaxRetry: 2,
+            fragLoadingMaxRetry: 3,
+          });
+
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            log(`Manifesto lido · ${hls.levels.length} variante(s)`, "lv-ok");
+            video
+              .play()
+              .catch(() => log("Autoplay bloqueado — clique em play"));
+          });
+          hls.on(Hls.Events.FRAG_BUFFERED, () => {
+            segments++;
+            set("mSeg", segments);
+            if (!startedAt) {
+              startedAt = Date.now();
+              retries = 0;
+              setState("live");
+              log("Sinal estável", "lv-ok");
+            }
+          });
+          hls.on(Hls.Events.LEVEL_SWITCHED, (_, d) => {
+            const lv = hls.levels[d.level];
+            if (lv) set("mRes", `${lv.width}×${lv.height}`);
+          });
+          hls.on(Hls.Events.ERROR, (_, data) => {
+            if (!data.fatal) return;
+            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+              mediaErrors++;
+              const MAX_MEDIA_ERRORS = 4;
+              if (mediaErrors > MAX_MEDIA_ERRORS) {
+                log(
+                  `Erro de mídia (${data.details}) — stream persistentemente corrompido`,
+                  "lv-err",
+                );
+                fail(data.details || data.type);
+                return;
+              }
+              log(`Erro de mídia (${data.details}) — recuperando`, "lv-err");
+              hls.recoverMediaError();
+              return;
+            }
+            fail(data.details || data.type);
+          });
+
+          hls.loadSource(url);
+          hls.attachMedia(video);
+          return;
+        }
+
+        /* Safari e iOS tocam HLS nativamente */
+        if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          document.getElementById("engine").textContent = "nativo";
+          video.src = url;
+          video.play().catch(() => {});
+          video.addEventListener(
+            "playing",
+            () => {
+              if (!startedAt) {
+                startedAt = Date.now();
+                setState("live");
+              }
+            },
+            {once: true},
+          );
+          video.addEventListener("error", () => fail("erro do elemento video"));
+          return;
+        }
+
+        fail("nenhum motor de reprodução disponível");
+      }
+
+      /* Backoff exponencial: stream de IPTV cai o tempo todo, e um player
+         que desiste no primeiro erro parece quebrado sem estar.
+         Erros permanentes (ex.: 404 — o ID do canal não existe mais no servidor)
+         não se resolvem tentando de novo, então pulam direto para o próximo canal. */
+      function fail(reason, permanent = false) {
+        const MAX = 6;
+        log(`Falha: ${reason}`, "lv-err");
+
+        if (permanent || retries >= MAX) {
+          set("mRetry", retries, true);
+          log(
+            permanent
+              ? "Canal indisponível — pulando"
+              : `Desistindo após ${MAX} tentativas`,
+            "lv-err",
+          );
+          skipToNextChannel();
+          return;
+        }
+
+        retries++;
+        startedAt = 0;
+        const wait = Math.min(1000 * 2 ** (retries - 1), 15000);
+        set("mRetry", retries, true);
+        setState("retrying", `${retries}/${MAX}`);
+        log(`Nova tentativa em ${(wait / 1000).toFixed(0)}s`);
+
+        clearTimeout(backoff);
+        backoff = setTimeout(() => {
+          const url = channels[current]?.url;
+          if (!url) return;
+          teardown();
+          attach(url);
+        }, wait);
+      }
+
+      function skipToNextChannel() {
+        autoSkips++;
+        if (autoSkips >= channels.length) {
+          setState("failed");
+          log("Nenhum canal disponível no momento", "lv-err");
+          return;
+        }
+        const next = (current + 1) % channels.length;
+        clearTimeout(backoff);
+        backoff = setTimeout(() => play(next, {auto: true}), 800);
+      }
+
+      /* ───────────────── medidores ───────────────── */
+      ticker = setInterval(() => {
+        let buf = 0;
+        try {
+          for (let i = 0; i < video.buffered.length; i++) {
+            if (
+              video.buffered.start(i) <= video.currentTime &&
+              video.currentTime <= video.buffered.end(i)
+            ) {
+              buf = video.buffered.end(i) - video.currentTime;
+            }
+          }
+        } catch {}
+        set("mBuffer", `${buf.toFixed(1)}s`, startedAt > 0 && buf < 1.5);
+
+        if (startedAt) {
+          const s = Math.floor((Date.now() - startedAt) / 1000);
+          set(
+            "mUptime",
+            `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`,
+          );
+        }
+        if (video.videoWidth)
+          set("mRes", `${video.videoWidth}×${video.videoHeight}`);
+      }, 1000);
+
+      /* ───────────────── lista ─────────────────
+         Uma lista <details> por categoria — colapsável, separada de verdade,
+         e não só uma etiqueta visual em cima de uma lista única.        */
+      let rowButtons = [];
+
+      function renderList() {
+        rundown.textContent = "";
+        rowButtons = new Array(channels.length);
+
+        const groups = new Map();
+        channels.forEach((ch, i) => {
+          if (!groups.has(ch.group)) groups.set(ch.group, []);
+          groups.get(ch.group).push(i);
+        });
+
+        groups.forEach((indices, group) => {
+          const details = document.createElement("details");
+          details.className = "cat-group";
+          details.open = true;
+
+          const summary = document.createElement("summary");
+          summary.className = "cat-summary";
+          summary.textContent = `${group} · ${indices.length}`;
+          details.appendChild(summary);
+
+          indices.forEach(i => {
+            const ch = channels[i];
+            const b = document.createElement("button");
+            b.className = "row";
+            b.type = "button";
+            b.setAttribute("aria-current", "false");
+            b.innerHTML = `<span class="row-lamp"></span>
+                           <span class="row-num">${String(ch.num).padStart(3, "0")}</span>
+                           <span class="row-name"></span>`;
+            b.querySelector(".row-name").textContent = ch.name;
+            b.addEventListener("click", () => play(i));
+            rowButtons[i] = b;
+            details.appendChild(b);
+          });
+
+          rundown.appendChild(details);
+        });
+
+        document.getElementById("chCount").textContent = channels.length;
+      }
+
+      /* ───────────────── teclado ───────────────── */
+      document.addEventListener("keydown", e => {
+        if (e.target.matches("input, textarea")) return;
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          play(Math.min(current + 1, channels.length - 1));
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          play(Math.max(current - 1, 0));
+        }
+        if (e.key === " ") {
+          e.preventDefault();
+          video.paused ? video.play() : video.pause();
+        }
+        if (e.key.toLowerCase() === "f") video.requestFullscreen?.();
+      });
+
+      /* ───────────────── painel de fontes ─────────────────
+         Fonte customizada (M3U ou Xtream) inserida e testada pelo próprio
+         usuário na interface — persiste só no localStorage do navegador.  */
+      function renderCustomSourcesList() {
+        const list = document.getElementById("srcList");
+        list.textContent = "";
+
+        if (customSources.length === 0) {
+          const li = document.createElement("li");
+          li.className = "src-empty";
+          li.textContent = 'Nenhuma fonte personalizada — use "+ Adicionar".';
+          list.appendChild(li);
+          return;
+        }
+
+        customSources.forEach((source, i) => {
+          const li = document.createElement("li");
+
+          const label = document.createElement("span");
+          label.className = "src-item-label";
+          label.textContent = sourceLabel(source);
+          label.title = sourceLabel(source);
+
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "src-remove";
+          remove.textContent = "remover";
+          remove.addEventListener("click", async () => {
+            customSources.splice(i, 1);
+            saveCustomSources(customSources);
+            renderCustomSourcesList();
+            await reloadChannels();
+          });
+
+          li.append(label, remove);
+          list.appendChild(li);
+        });
+      }
+
+      function buildSourceFromForm() {
+        const type = document.getElementById("srcType").value;
+
+        if (type === "m3u") {
+          const url = document.getElementById("srcM3uUrl").value.trim();
+          if (!url) throw new Error("Informe a URL da lista M3U.");
+          return {mode: "m3u", m3u: {url}};
+        }
+
+        if (type === "video") {
+          const url = document.getElementById("srcVideoUrl").value.trim();
+          if (!url) throw new Error("Informe a URL do vídeo.");
+          let name = "Vídeo";
+          try {
+            const fromPath = decodeURIComponent(
+              new URL(url).pathname.split("/").pop() || "",
+            );
+            if (fromPath) name = fromPath;
+          } catch {}
+          return {
+            mode: "static",
+            channels: [{name, group: "Vídeos", url}],
+          };
+        }
+
+        const base = document
+          .getElementById("srcBase")
+          .value.trim()
+          .replace(/\/+$/, "");
+        const user = document.getElementById("srcUser").value.trim();
+        const pass = document.getElementById("srcPass").value;
+        const output = document.getElementById("srcOutput").value;
+        if (!base || !user || !pass)
+          throw new Error("Preencha servidor, usuário e senha.");
+        return {mode: "xtream", xtream: {base, user, pass, output}};
+      }
+
+      document.getElementById("srcToggle").addEventListener("click", () => {
+        const form = document.getElementById("srcForm");
+        form.hidden = !form.hidden;
+      });
+
+      document.getElementById("srcType").addEventListener("change", e => {
+        const type = e.target.value;
+        const isXtream = type === "xtream";
+        document.getElementById("srcM3uField").hidden = type !== "m3u";
+        document.getElementById("srcVideoField").hidden = type !== "video";
+        document.getElementById("srcBaseField").hidden = !isXtream;
+        document.getElementById("srcUserField").hidden = !isXtream;
+        document.getElementById("srcPassField").hidden = !isXtream;
+        document.getElementById("srcOutputField").hidden = !isXtream;
+      });
+
+      document.getElementById("srcForm").addEventListener("submit", async e => {
+        e.preventDefault();
+        let source;
+        try {
+          source = buildSourceFromForm();
+        } catch (err) {
+          log(err.message, "lv-err");
+          return;
+        }
+
+        customSources.push(source);
+        saveCustomSources(customSources);
+        renderCustomSourcesList();
+        e.target.reset();
+        await reloadChannels();
+      });
+
+      /* ───────────────── carregamento ───────────────── */
+      async function reloadChannels() {
+        try {
+          channels = await loadAllChannels();
+          renderList();
+          log(`${channels.length} canais carregados`, "lv-ok");
+          if (current === -1) play(0);
+        } catch (err) {
+          log(`Não foi possível carregar a lista: ${err.message}`, "lv-err");
+          setState("failed");
+        }
+      }
+
+      /* ───────────────── início ───────────────── */
+      renderCustomSourcesList();
+      reloadChannels();
+    </script>
+  </body>
+</html>
