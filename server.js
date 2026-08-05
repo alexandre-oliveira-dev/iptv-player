@@ -1,6 +1,7 @@
 const express = require('express');
+const http = require('http');
+const https = require('https');
 const path = require('path');
-const { Readable } = require('stream');
 
 const app = express();
 const PORT = process.env.PORT || 8788;
@@ -58,6 +59,70 @@ function rewritePlaylist(body, targetUrl) {
     .join('\n');
 }
 
+function headerGetter(headers) {
+  return {
+    get(name) {
+      const value = headers[name.toLowerCase()];
+      return Array.isArray(value) ? value.join(', ') : value || null;
+    },
+  };
+}
+
+function streamToText(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    stream.on('error', reject);
+  });
+}
+
+function fetchUpstream(targetUrl, options = {}, redirects = 5) {
+  return new Promise((resolve, reject) => {
+    let parsed;
+    try {
+      parsed = new URL(targetUrl);
+    } catch {
+      reject(new Error('URL inválida.'));
+      return;
+    }
+
+    const transport = parsed.protocol === 'https:' ? https : http;
+    const req = transport.request(
+      parsed,
+      { headers: options.headers || {} },
+      (response) => {
+        const status = response.statusCode || 0;
+        const location = response.headers.location;
+
+        if (
+          [301, 302, 303, 307, 308].includes(status) &&
+          location &&
+          redirects > 0
+        ) {
+          response.resume();
+          const nextUrl = new URL(location, targetUrl).toString();
+          fetchUpstream(nextUrl, options, redirects - 1).then(resolve, reject);
+          return;
+        }
+
+        resolve({
+          ok: status >= 200 && status < 300,
+          status,
+          url: targetUrl,
+          headers: headerGetter(response.headers),
+          body: response,
+          text: () => streamToText(response),
+        });
+      },
+    );
+
+    req.setTimeout(25000, () => req.destroy(new Error('timeout')));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 app.get('/api/proxy', async (req, res) => {
   const target = req.query.url;
   if (!target) return res.status(400).send('Parâmetro "url" ausente.');
@@ -71,7 +136,7 @@ app.get('/api/proxy', async (req, res) => {
     // "carregando" pra sempre — mesmo que o download em si funcione.
     if (req.headers.range) upstreamHeaders.Range = req.headers.range;
 
-    const upstream = await fetch(target, { headers: upstreamHeaders });
+    const upstream = await fetchUpstream(target, { headers: upstreamHeaders });
 
     res.set('Access-Control-Allow-Origin', '*');
 
@@ -103,9 +168,7 @@ app.get('/api/proxy', async (req, res) => {
 
     // Streams de TV ao vivo (.ts) nunca terminam — repassa em tempo real
     // em vez de bufferizar tudo antes de responder.
-    Readable.fromWeb(upstream.body)
-      .on('error', () => res.end())
-      .pipe(res);
+    upstream.body.on('error', () => res.end()).pipe(res);
     return;
   } catch (err) {
     return res.status(502).send(`Erro ao acessar upstream: ${err.message}`);

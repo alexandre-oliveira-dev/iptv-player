@@ -211,6 +211,37 @@
         max-height: 60vh;
         overflow-y: auto;
       }
+      .source-section {
+        border-bottom: 1px solid var(--rule);
+      }
+      .source-section + .source-section {
+        border-top: 2px solid var(--ink);
+      }
+      .source-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        background: var(--paper);
+        border-bottom: 1px solid var(--rule);
+        padding: 10px 12px;
+      }
+      .source-title {
+        margin: 0;
+        font-family: "Barlow Condensed", sans-serif;
+        font-size: 22px;
+        font-weight: 700;
+        line-height: 1;
+        text-transform: uppercase;
+      }
+      .source-count {
+        flex: none;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
       .cat-group {
         border-bottom: 1px solid var(--rule-soft);
       }
@@ -673,16 +704,28 @@
 
       const SOURCES = [
         {
-          // iptv-org/iptv: lista mantida pela comunidade, com bot que verifica
-          // e remove links mortos automaticamente. Testada manualmente (amostra
-          // de 302 canais BR via tvg-id): 202 responderam com manifesto real
-          // (#EXTM3U), ~67% de acerto — bem acima da lista antiga (2016-2017).
-          // É o índice GLOBAL (~13,5 mil canais, todos os países); carregada
-          // ao vivo a cada load, não é um snapshot fixo.
+          section: "LELE",
+          order: 0,
+          mode: "m3u",
+          m3u: {
+            url: "https://iptvmate.net/livecams/stripchat_girls_english_200.m3u",
+          },
+        },
+        {
+          section: "Brasil",
+          order: 1,
+          mode: "m3u",
+          m3u: {
+            url: "https://iptv-org.github.io/iptv/countries/br.m3u",
+          },
+        },
+        {
+          section: "Global",
+          order: 2,
           mode: "m3u",
           m3u: {
             url: "https://iptv-org.github.io/iptv/index.m3u",
-          }, 
+          },
         },
       ];
 
@@ -881,12 +924,35 @@ http://165.227.100.253/hbo2/tracks-v1a1/index.m3u8?pxAuth=klaBCicXdOUibkn0mzfD51
           .filter(ch => ch.url);
       }
 
+      function dedupeChannels(list) {
+        const seen = new Set();
+        return list.filter(ch => {
+          const key = (ch.url || "").trim();
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      }
+
+      function tagSourceChannels(channels, source, sourceIndex) {
+        const sourceSection = source.section || "Fontes personalizadas";
+        const sourceOrder =
+          typeof source.order === "number" ? source.order : sourceIndex;
+
+        return channels.map(ch => ({
+          ...ch,
+          sourceSection,
+          sourceOrder,
+        }));
+      }
+
       /* Consulta TODAS as fontes (Xtream ou M3U cru; não para na primeira que
          funciona) e funde os canais num único array só, ordenado por categoria. */
       async function loadAllChannels() {
         const merged = [];
+        const allSources = [...SOURCES, ...customSources];
 
-        for (const source of [...SOURCES, ...customSources]) {
+        for (const [sourceIndex, source] of allSources.entries()) {
           const label = sourceLabel(source);
 
           try {
@@ -905,7 +971,7 @@ http://165.227.100.253/hbo2/tracks-v1a1/index.m3u8?pxAuth=klaBCicXdOUibkn0mzfD51
             }
 
             log(`✅ ${label}: ${chans.length} canais`, "lv-ok");
-            merged.push(...chans);
+            merged.push(...tagSourceChannels(chans, source, sourceIndex));
           } catch (err) {
             log(`❌ ${label}: ${err.message}`, "lv-err");
           }
@@ -914,17 +980,24 @@ http://165.227.100.253/hbo2/tracks-v1a1/index.m3u8?pxAuth=klaBCicXdOUibkn0mzfD51
         if (merged.length === 0)
           throw new Error("Nenhuma fonte respondeu corretamente.");
 
-        merged.sort(
+        const unique = dedupeChannels(merged);
+        const duplicates = merged.length - unique.length;
+        if (duplicates > 0)
+          log(`${duplicates} canais duplicados removidos`);
+
+        unique.sort(
           (a, b) =>
+            a.sourceOrder - b.sourceOrder ||
+            a.sourceSection.localeCompare(b.sourceSection, "pt-BR") ||
             a.group.localeCompare(b.group, "pt-BR") ||
             a.name.localeCompare(b.name, "pt-BR"),
         );
 
-        merged.forEach((ch, i) => {
+        unique.forEach((ch, i) => {
           ch.num = i + 1;
         });
 
-        return merged;
+        return unique;
       }
 
       /* ───────────────── elementos ───────────────── */
@@ -1009,7 +1082,12 @@ http://165.227.100.253/hbo2/tracks-v1a1/index.m3u8?pxAuth=klaBCicXdOUibkn0mzfD51
           "0",
         );
         document.getElementById("npName").textContent = ch.name;
-        document.getElementById("npGroup").textContent = ch.group || "";
+        document.getElementById("npGroup").textContent = [
+          ch.sourceSection,
+          ch.group,
+        ]
+          .filter(Boolean)
+          .join(" · ");
         set("mSeg", 0);
         set("mRetry", 0);
         set("mRes", "—");
@@ -1230,39 +1308,79 @@ http://165.227.100.253/hbo2/tracks-v1a1/index.m3u8?pxAuth=klaBCicXdOUibkn0mzfD51
         rundown.textContent = "";
         rowButtons = new Array(channels.length);
 
-        const groups = new Map();
+        const sections = new Map();
         channels.forEach((ch, i) => {
-          if (!groups.has(ch.group)) groups.set(ch.group, []);
-          groups.get(ch.group).push(i);
+          const section = ch.sourceSection || "Outras fontes";
+          if (!sections.has(section)) {
+            sections.set(section, {
+              order: ch.sourceOrder ?? 99,
+              indices: [],
+            });
+          }
+          sections.get(section).indices.push(i);
         });
 
-        groups.forEach((indices, group) => {
-          const details = document.createElement("details");
-          details.className = "cat-group";
-          details.open = true;
+        [...sections.entries()]
+          .sort(
+            (a, b) =>
+              a[1].order - b[1].order ||
+              a[0].localeCompare(b[0], "pt-BR"),
+          )
+          .forEach(([section, sectionData]) => {
+            const sourceSection = document.createElement("section");
+            sourceSection.className = "source-section";
 
-          const summary = document.createElement("summary");
-          summary.className = "cat-summary";
-          summary.textContent = `${group} · ${indices.length}`;
-          details.appendChild(summary);
+            const header = document.createElement("div");
+            header.className = "source-header";
 
-          indices.forEach(i => {
-            const ch = channels[i];
-            const b = document.createElement("button");
-            b.className = "row";
-            b.type = "button";
-            b.setAttribute("aria-current", "false");
-            b.innerHTML = `<span class="row-lamp"></span>
-                           <span class="row-num">${String(ch.num).padStart(3, "0")}</span>
-                           <span class="row-name"></span>`;
-            b.querySelector(".row-name").textContent = ch.name;
-            b.addEventListener("click", () => play(i));
-            rowButtons[i] = b;
-            details.appendChild(b);
+            const title = document.createElement("h3");
+            title.className = "source-title";
+            title.textContent = section;
+
+            const count = document.createElement("span");
+            count.className = "source-count";
+            count.textContent = `${sectionData.indices.length} canais`;
+
+            header.append(title, count);
+            sourceSection.appendChild(header);
+
+            const groups = new Map();
+            sectionData.indices.forEach(i => {
+              const group = channels[i].group || "Sem categoria";
+              if (!groups.has(group)) groups.set(group, []);
+              groups.get(group).push(i);
+            });
+
+            groups.forEach((indices, group) => {
+              const details = document.createElement("details");
+              details.className = "cat-group";
+              details.open = true;
+
+              const summary = document.createElement("summary");
+              summary.className = "cat-summary";
+              summary.textContent = `${group} · ${indices.length}`;
+              details.appendChild(summary);
+
+              indices.forEach(i => {
+                const ch = channels[i];
+                const b = document.createElement("button");
+                b.className = "row";
+                b.type = "button";
+                b.setAttribute("aria-current", "false");
+                b.innerHTML = `<span class="row-lamp"></span>
+                               <span class="row-num">${String(ch.num).padStart(3, "0")}</span>
+                               <span class="row-name"></span>`;
+                b.querySelector(".row-name").textContent = ch.name;
+                b.addEventListener("click", () => play(i));
+                rowButtons[i] = b;
+                details.appendChild(b);
+              });
+
+              sourceSection.appendChild(details);
+            });
+
+            rundown.appendChild(sourceSection);
           });
-
-          rundown.appendChild(details);
-        });
 
         document.getElementById("chCount").textContent = channels.length;
       }
